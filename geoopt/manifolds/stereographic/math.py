@@ -959,9 +959,23 @@ def _geodesic(
     t: torch.Tensor, x: torch.Tensor, y: torch.Tensor, k: torch.Tensor, dim: int = -1
 ):
     # this is not very numerically stable
-    v = _mobius_add(-x, y, k, dim=dim)
-    tv = _mobius_scalar_mul(t, v, k, dim=dim)
-    gamma_t = _mobius_add(x, tv, k, dim=dim)
+    x2 = x.pow(2).sum(dim=dim, keepdim=True)
+    y2 = y.pow(2).sum(dim=dim, keepdim=True)
+    xy = (x * y).sum(dim=dim, keepdim=True)
+    kx2 = k * x2
+    ky2 = k * y2
+    num = (1 + kx2) * y - (1 + 2 * k * xy - ky2) * x
+    denom = 1 + 2 * k * xy + kx2 * ky2
+    v = num / denom.clamp_min(1e-15)
+    v_norm = v.norm(dim=dim, keepdim=True, p=2).clamp_min(1e-15)
+    scale = tan_k(t * artan_k(v_norm, k), k) / v_norm
+    tv = scale * v
+    tv2 = tv.pow(2).sum(dim=dim, keepdim=True)
+    xtv = (x * tv).sum(dim=dim, keepdim=True)
+    ktv2 = k * tv2
+    num = (1 - 2 * k * xtv - ktv2) * x + (1 + kx2) * tv
+    denom = 1 - 2 * k * xtv + kx2 * ktv2
+    gamma_t = num / denom.clamp_min(1e-15)
     return gamma_t
 
 
